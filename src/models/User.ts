@@ -14,12 +14,14 @@ export interface UserDocument extends IUser, Document {
     | 'passwordResetExpires'
     | 'emailVerificationToken'
     | 'emailVerificationExpires'
+    | 'tokens'
   >;
   getActiveSessions(): Promise<ISessionDocument[]>;
   addToken(token: string, type: TokenTypes, expiresAt: Date): Promise<UserDocument>;
   findValidToken(token: string, type: TokenTypes): any;
   revokeAllTokens(type?: TokenTypes): Promise<UserDocument>;
   revokeToken(token: string): Promise<UserDocument>;
+  cleanupExpiredTokens(): Promise<UserDocument>;
 }
 
 const userSchema = new Schema<UserDocument>(
@@ -75,11 +77,8 @@ const userSchema = new Schema<UserDocument>(
       },
     },
     joinDate: {
-      type: String,
-      trim: true,
-      default: function () {
-        return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      },
+      type: Date,
+      default: Date.now,
     },
     profileImage: {
       type: String,
@@ -87,6 +86,11 @@ const userSchema = new Schema<UserDocument>(
       default: function () {
         return `/avatars/${this.firstName?.toLowerCase()}-${this.lastName?.toLowerCase()}.jpg`;
       },
+    },
+    profileImagePublicId: {
+      type: String,
+      trim: true,
+      default: null,
     },
     role: {
       type: String,
@@ -216,6 +220,7 @@ userSchema.methods.getPublicProfile = function (): Omit<
   | 'passwordResetExpires'
   | 'emailVerificationToken'
   | 'emailVerificationExpires'
+  | 'tokens'
 > {
   const user = this.toObject();
   delete user.password;
@@ -223,6 +228,7 @@ userSchema.methods.getPublicProfile = function (): Omit<
   delete user.passwordResetExpires;
   delete user.emailVerificationToken;
   delete user.emailVerificationExpires;
+  delete user.tokens;
   delete user.__v;
   return user;
 };
@@ -322,6 +328,21 @@ userSchema.methods.revokeToken = function (token: string) {
     return this.save();
   }
   return Promise.resolve(this);
+};
+
+// Instance method to cleanup expired and revoked tokens
+userSchema.methods.cleanupExpiredTokens = function () {
+  const now = new Date();
+  this.tokens = this.tokens.filter(
+    (token: {
+      token: string;
+      type: TokenTypes;
+      expiresAt: Date;
+      isRevoked: boolean;
+      createdAt?: Date;
+    }) => token.expiresAt > now && !token.isRevoked
+  );
+  return this.save();
 };
 
 // Static method to cleanup expired tokens

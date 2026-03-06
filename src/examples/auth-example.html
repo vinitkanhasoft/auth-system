@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Token Refresh Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .hidden {
+            display: none;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Automatic Token Refresh Example</h1>
+    <p>This example demonstrates automatic access token refresh before expiration.</p>
+    
+    <div id="loginSection" class="container">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <div>
+                <label>Email:</label><br>
+                <input type="email" id="email" value="john.doe@example.com" required>
+            </div>
+            <br>
+            <div>
+                <label>Password:</label><br>
+                <input type="password" id="password" value="Password123!" required>
+            </div>
+            <br>
+            <button type="submit" class="btn">Login</button>
+        </form>
+    </div>
+
+    <div id="dashboardSection" class="container hidden">
+        <h2>Dashboard</h2>
+        <div id="userInfo" class="info">
+            <strong>User Info:</strong> Loading...
+        </div>
+        
+        <div id="tokenStatus" class="info">
+            <strong>Token Status:</strong> Checking...
+        </div>
+        
+        <div>
+            <button class="btn" onclick="getProfile()">Get Profile</button>
+            <button class="btn" onclick="getSessions()">Get Sessions</button>
+            <button class="btn" onclick="testApiCall()">Test API Call</button>
+            <button class="btn-danger" onclick="logout()">Logout</button>
+        </div>
+        
+        <div id="apiResponse" class="container hidden">
+            <h3>API Response:</h3>
+            <pre id="responseContent"></pre>
+        </div>
+    </div>
+
+    <div id="statusMessage"></div>
+
+    <script type="module">
+        // Token Manager Implementation
+        class TokenManager {
+            constructor() {
+                this.refreshPromise = null;
+                this.refreshThreshold = 300; // 5 minutes before expiration
+                this.setupAutoRefresh();
+            }
+
+            static storeTokens(tokens) {
+                localStorage.setItem('accessToken', tokens.accessToken);
+                localStorage.setItem('refreshToken', tokens.refreshToken);
+                if (tokens.sessionId) {
+                    localStorage.setItem('sessionId', tokens.sessionId);
+                }
+            }
+
+            static getStoredTokens() {
+                const accessToken = localStorage.getItem('accessToken');
+                const refreshToken = localStorage.getItem('refreshToken');
+                const sessionId = localStorage.getItem('sessionId');
+
+                if (!accessToken || !refreshToken) {
+                    return null;
+                }
+
+                return { accessToken, refreshToken, sessionId };
+            }
+
+            static clearTokens() {
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('sessionId');
+            }
+
+            static isTokenExpiredOrExpiringSoon(token, thresholdSeconds = 300) {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const currentTime = Math.floor(Date.now() / 1000);
+                    const timeUntilExpiration = payload.exp - currentTime;
+                    return timeUntilExpiration <= thresholdSeconds;
+                } catch (error) {
+                    return true;
+                }
+            }
+
+            async refreshAccessToken() {
+                if (this.refreshPromise) {
+                    return this.refreshPromise;
+                }
+
+                this.refreshPromise = this.performTokenRefresh();
+                
+                try {
+                    const newAccessToken = await this.refreshPromise;
+                    return newAccessToken;
+                } finally {
+                    this.refreshPromise = null;
+                }
+            }
+
+            async performTokenRefresh() {
+                const tokens = TokenManager.getStoredTokens();
+                if (!tokens?.refreshToken) {
+                    throw new Error('No refresh token available');
+                }
+
+                try {
+                    const response = await fetch('/api/auth/refresh-token', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            refreshToken: tokens.refreshToken,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            TokenManager.clearTokens();
+                            throw new Error('Refresh token expired. Please login again.');
+                        }
+                        throw new Error(`Token refresh failed: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.success && data.data?.accessToken) {
+                        const updatedTokens = {
+                            ...tokens,
+                            accessToken: data.data.accessToken,
+                        };
+                        TokenManager.storeTokens(updatedTokens);
+                        
+                        return data.data.accessToken;
+                    } else {
+                        throw new Error('Invalid response from token refresh');
+                    }
+                } catch (error) {
+                    TokenManager.clearTokens();
+                    throw error;
+                }
+            }
+
+            async getValidAccessToken() {
+                const tokens = TokenManager.getStoredTokens();
+                
+                if (!tokens?.accessToken) {
+                    throw new Error('No access token available');
+                }
+
+                if (TokenManager.isTokenExpiredOrExpiringSoon(tokens.accessToken, this.refreshThreshold)) {
+                    try {
+                        return await this.refreshAccessToken();
+                    } catch (error) {
+                        TokenManager.clearTokens();
+                        throw error;
+                    }
+                }
+
+                return tokens.accessToken;
+            }
+
+            async authenticatedFetch(url, options = {}) {
+                try {
+                    const accessToken = await this.getValidAccessToken();
+                    
+                    const authOptions = {
+                        ...options,
+                        headers: {
+                            ...options.headers,
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    };
+
+                    return fetch(url, authOptions);
+                } catch (error) {
+                    throw new Error(`Authentication failed: ${error}`);
+                }
+            }
+
+            setupAutoRefresh() {
+                setInterval(async () => {
+                    try {
+                        await this.getValidAccessToken();
+                        console.log('Token auto-refreshed successfully');
+                        updateTokenStatus();
+                    } catch (error) {
+                        console.error('Auto token refresh failed:', error);
+                        showStatus('Auto refresh failed. Please login again.', 'error');
+                        logout();
+                    }
+                }, 60000); // Check every minute
+            }
+        }
+
+        // Auth Client
+        class AuthClient {
+            constructor() {
+                this.tokenManager = new TokenManager();
+            }
+
+            async login(email, password) {
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ email, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.data) {
+                        TokenManager.storeTokens({
+                            accessToken: data.data.accessToken,
+                            refreshToken: data.data.refreshToken,
+                            sessionId: data.data.sessionId,
+                        });
+                        return data;
+                    } else {
+                        throw new Error(data.message || 'Login failed');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    throw error;
+                }
+            }
+
+            async logout() {
+                const tokens = TokenManager.getStoredTokens();
+                
+                if (tokens) {
+                    try {
+                        await fetch('/api/auth/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${tokens.accessToken}`,
+                            },
+                            body: JSON.stringify({
+                                refreshToken: tokens.refreshToken,
+                                sessionId: tokens.sessionId,
+                            }),
+                        });
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    }
+                }
+
+                TokenManager.clearTokens();
+            }
+
+            async apiCall(url, options = {}) {
+                try {
+                    return await this.tokenManager.authenticatedFetch(url, options);
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    
+                    if (error.message.includes('Authentication failed')) {
+                        showStatus('Authentication failed. Please login again.', 'error');
+                        logout();
+                    }
+                    
+                    throw error;
+                }
+            }
+
+            isAuthenticated() {
+                const tokens = TokenManager.getStoredTokens();
+                if (!tokens) return false;
+                return !TokenManager.isTokenExpiredOrExpiringSoon(tokens.accessToken, 0);
+            }
+        }
+
+        // Initialize
+        const authClient = new AuthClient();
+
+        // UI Functions
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateTokenStatus() {
+            const tokens = TokenManager.getStoredTokens();
+            const statusDiv = document.getElementById('tokenStatus');
+            
+            if (!tokens) {
+                statusDiv.innerHTML = '<strong>Token Status:</strong> No tokens';
+                return;
+            }
+
+            try {
+                const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]));
+                const currentTime = Math.floor(Date.now() / 1000);
+                const timeUntilExpiration = payload.exp - currentTime;
+                const minutesUntilExpiration = Math.floor(timeUntilExpiration / 60);
+                
+                let status = `<strong>Token Status:</strong> Expires in ${minutesUntilExpiration} minutes`;
+                
+                if (TokenManager.isTokenExpiredOrExpiringSoon(tokens.accessToken, 300)) {
+                    status += ' (Will refresh soon)';
+                }
+                
+                statusDiv.innerHTML = status;
+            } catch (error) {
+                statusDiv.innerHTML = '<strong>Token Status:</strong> Invalid token';
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            updateTokenStatus();
+        }
+
+        function showLogin() {
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('dashboardSection').classList.add('hidden');
+        }
+
+        async function login(email, password) {
+            try {
+                showStatus('Logging in...', 'info');
+                const result = await authClient.login(email, password);
+                showStatus('Login successful!', 'success');
+                showDashboard();
+            } catch (error) {
+                showStatus(`Login failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function logout() {
+            try {
+                await authClient.logout();
+                showStatus('Logged out successfully', 'success');
+                showLogin();
+            } catch (error) {
+                showStatus(`Logout error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getProfile() {
+            try {
+                showStatus('Getting profile...', 'info');
+                const response = await authClient.apiCall('/api/auth/profile');
+                const data = await response.json();
+                showApiResponse(data);
+                showStatus('Profile retrieved successfully', 'success');
+            } catch (error) {
+                showStatus(`Failed to get profile: ${error.message}`, 'error');
+            }
+        }
+
+        async function getSessions() {
+            try {
+                showStatus('Getting sessions...', 'info');
+                const response = await authClient.apiCall('/api/auth/sessions');
+                const data = await response.json();
+                showApiResponse(data);
+                showStatus('Sessions retrieved successfully', 'success');
+            } catch (error) {
+                showStatus(`Failed to get sessions: ${error.message}`, 'error');
+            }
+        }
+
+        async function testApiCall() {
+            try {
+                showStatus('Testing API call...', 'info');
+                const response = await authClient.apiCall('/api/auth/profile');
+                const data = await response.json();
+                showApiResponse(data);
+                showStatus('API call successful (token was automatically refreshed if needed)', 'success');
+            } catch (error) {
+                showStatus(`API call failed: ${error.message}`, 'error');
+            }
+        }
+
+        function showApiResponse(data) {
+            const responseDiv = document.getElementById('apiResponse');
+            const contentDiv = document.getElementById('responseContent');
+            contentDiv.textContent = JSON.stringify(data, null, 2);
+            responseDiv.classList.remove('hidden');
+        }
+
+        // Event Listeners
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            await login(email, password);
+        });
+
+        // Check authentication on page load
+        window.addEventListener('load', () => {
+            if (authClient.isAuthenticated()) {
+                showDashboard();
+                showStatus('Already logged in', 'info');
+            } else {
+                showLogin();
+            }
+        });
+
+        // Update token status every 30 seconds
+        setInterval(updateTokenStatus, 30000);
+
+        // Make functions globally available
+        window.getProfile = getProfile;
+        window.getSessions = getSessions;
+        window.testApiCall = testApiCall;
+        window.logout = logout;
+    </script>
+</body>
+</html>

@@ -11,6 +11,7 @@ interface SeederOptions {
   check?: boolean;
   stats?: boolean;
   custom?: boolean;
+  banners?: boolean;
 }
 
 async function main() {
@@ -34,6 +35,9 @@ async function main() {
         break;
       case '--custom':
         options.custom = true;
+        break;
+      case '--banners':
+        options.banners = true;
         break;
       case '--help':
       case '-h':
@@ -61,17 +65,23 @@ async function main() {
       console.log('\n📊 Database Statistics:');
       console.log('========================');
       console.log(`Total Users: ${stats.users}`);
-      console.log(`Total Tokens: ${stats.tokens}`);
+      console.log(`Total Banners: ${stats.banners}`);
 
       console.log('\n👥 Users by Role:');
       Object.entries(stats.usersByRole).forEach(([role, count]) => {
         console.log(`  ${role}: ${count}`);
       });
 
-      console.log('\n🔑 Tokens by Type:');
-      Object.entries(stats.tokensByType).forEach(([type, count]) => {
-        console.log(`  ${type}: ${count}`);
-      });
+      console.log('\n🎨 Banners by Status:');
+      console.log(`  Active: ${stats.bannersByStatus.active}`);
+      console.log(`  Inactive: ${stats.bannersByStatus.inactive}`);
+      return;
+    }
+
+    if (options.banners) {
+      // Seed only banners
+      await seeder.seedBanners();
+      console.log('✅ Banners seeded successfully');
       return;
     }
 
@@ -88,22 +98,18 @@ async function main() {
             isEmailVerified: true,
           },
         ],
-        tokens: [
+        banners: [
           {
-            userId: null, // Will be set after user creation
-            token: 'custom-token-123',
-            type: TokenTypes.ACCESS_TOKEN,
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-            isRevoked: false,
+            title: 'Custom Promotion Banner',
+            description: 'This is a custom promotional banner for special offers',
+            altText: 'Custom promotion banner with special deals',
+            bannerImage: 'https://res.cloudinary.com/demo/image/upload/v1234567890/banners/custom-promo.jpg',
+            bannerImagePublicId: 'banners/custom-promo',
+            isActive: true,
+            displayOrder: 10,
           },
         ],
       };
-
-      // Create user first, then assign to token
-      const createdUsers = await seeder.seedUsers();
-      if (createdUsers.length > 0) {
-        customData.tokens[0].userId = createdUsers[0]._id;
-      }
 
       await seeder.seedCustomData(customData);
       console.log('✅ Custom data seeded successfully');
@@ -133,14 +139,16 @@ Options:
   --clear, -c     Clear database before seeding
   --check, -k     Check if database is seeded
   --stats, -s     Show database statistics
+  --banners       Seed only banners
   --custom        Seed custom example data
   --help, -h      Show this help message
 
 Examples:
-  npm run seed                    # Seed with default data
+  npm run seed                    # Seed with default data (users + banners)
   npm run seed --clear           # Clear and seed with default data
   npm run seed --check           # Check if database is seeded
   npm run seed --stats           # Show database statistics
+  npm run seed --banners         # Seed only banners
   npm run seed --custom          # Seed custom example data
 
 Environment Variables:
