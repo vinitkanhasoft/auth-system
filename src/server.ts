@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { database } from './config/database';
 import { redis } from './config/redis';
 import { logger } from './utils/logger';
+import { startTokenCleanupJob } from './utils/tokenCleanup';
 import routes from './routes';
 import { apiRateLimit } from './middleware/rateLimiter';
 import { getSystemInfo, getContactInfo } from './constants/systemInfo';
@@ -183,6 +184,10 @@ const startServer = async () => {
     // Initialize Redis connection
     await redis.connect();
     logger.info('Redis connected successfully');
+
+    // Start token cleanup job
+    startTokenCleanupJob();
+    logger.info('Token cleanup job started');
 
     // Start HTTP server
     const server = app.listen(PORT, () => {

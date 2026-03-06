@@ -13,6 +13,7 @@ export interface IUser {
   dateOfBirth?: Date;
   joinDate?: string;
   profileImage?: string;
+  profileImagePublicId?: string | null;
   role: UserRoles;
   twoFactorEnabled?: boolean;
   isEmailVerified: boolean;
@@ -93,6 +94,17 @@ export interface IPasswordReset {
 
 export interface IRefreshTokenRequest {
   refreshToken: string;
+}
+
+export interface IUpdateProfile {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  phoneCountryCode?: string;
+  address?: string;
+  dateOfBirth?: string;
+  profileImage?: string;
 }
 
 export interface IRateLimitInfo {

@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/authController';
 import { PasswordController } from '../controllers/passwordController';
 import { authenticate } from '../middleware/auth';
 import { requireEmailVerification } from '../middleware/rbac';
+import { uploadSingleImage } from '../middleware/upload';
 import {
   registrationRateLimit,
   loginRateLimit,
@@ -62,6 +63,30 @@ router.post('/verify-email', emailVerificationRateLimit, AuthController.verifyEm
 router.get('/profile', authenticate, authRateLimit, AuthController.getProfile);
 
 /**
+ * @route   PUT /api/auth/profile
+ * @desc    Update user profile
+ * @access   Private
+ * @rateLimit 20 requests per 15 minutes per user
+ */
+router.put('/profile', authenticate, authRateLimit, AuthController.updateProfile);
+
+/**
+ * @route   GET /api/auth/sessions
+ * @desc    Get active sessions
+ * @access   Private
+ * @rateLimit 50 requests per 15 minutes per user
+ */
+router.get('/sessions', authenticate, authRateLimit, AuthController.getActiveSessions);
+
+/**
+ * @route   POST /api/auth/revoke-session
+ * @desc    Revoke a specific session
+ * @access   Private
+ * @rateLimit 20 requests per 15 minutes per user
+ */
+router.post('/revoke-session', authenticate, authRateLimit, AuthController.revokeSession);
+
+/**
  * @route   POST /api/auth/forgot-password
  * @desc    Send password reset email
  * @access   Public
@@ -92,5 +117,21 @@ router.post('/verify-reset-token', passwordResetRateLimit, PasswordController.ve
  * @rateLimit 5 requests per hour per user
  */
 router.post('/change-password', authenticate, authRateLimit, PasswordController.changePassword);
+
+/**
+ * @route   POST /api/auth/upload-profile-image
+ * @desc    Upload profile image to Cloudinary
+ * @access   Private
+ * @rateLimit 10 requests per hour per user
+ */
+router.post('/upload-profile-image', authenticate, authRateLimit, uploadSingleImage, AuthController.uploadProfileImage);
+
+/**
+ * @route   DELETE /api/auth/profile-image
+ * @desc    Delete profile image from Cloudinary
+ * @access   Private
+ * @rateLimit 10 requests per hour per user
+ */
+router.delete('/profile-image', authenticate, authRateLimit, AuthController.deleteProfileImage);
 
 export default router;

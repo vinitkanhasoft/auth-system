@@ -101,7 +101,6 @@ public
 .tern-port
 
 # Stores VSCode versions used for testing VSCode extensions
-.vscode-test
 
 # yarn v2
 .yarn/cache
@@ -224,7 +223,6 @@ dist
 .tern-port
 
 # Stores VSCode versions used for testing VSCode extensions
-.vscode-test
 
 # yarn v2
 .yarn/cache
@@ -234,7 +232,6 @@ dist
 .pnp.*
 
 # IDE and editor files
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -395,9 +392,6 @@ playwright/.cache/
 .env.*.local
 
 # IDE specific files
-.vscode/settings.json
-.vscode/launch.json
-.vscode/extensions.json
 .idea/
 *.iml
 *.ipr
@@ -436,3 +430,6 @@ $RECYCLE.BIN/
 # secrets/
 # private-keys/
 # user-uploads/
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

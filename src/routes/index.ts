@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth';
+import bannerRoutes from './banner';
 import { createSuccessResponse } from '../constants/apiResponses';
 import { getSystemInfo, getContactInfo } from '../constants/systemInfo';
 
@@ -18,5 +19,6 @@ router.get('/health', (req, res) => {
 
 // API routes
 router.use('/auth', authRoutes);
+router.use('/banners', bannerRoutes);
 
 export default router;
