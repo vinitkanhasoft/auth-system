@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running pre-push checks..."
+
+# Run TypeScript compilation check
+echo "📝 Checking TypeScript compilation..."
+if ! npm run build; then
+    echo "❌ TypeScript compilation failed"
+    exit 1
+fi
+
+# Run tests if they exist
+if [ -d "tests" ] || [ -d "__tests__" ] || grep -q "test" package.json; then
+    echo "🧪 Running tests..."
+    if ! npm test; then
+        echo "❌ Tests failed"
+        exit 1
+    fi
+else
+    echo "⚠️  No tests found, skipping test run"
+fi
+
+# Run linting
+echo "🔧 Running linting..."
+if ! npm run lint; then
+    echo "❌ Linting failed. Run 'npm run lint:fix' to fix issues"
+    exit 1
+fi
+
+echo "✅ All pre-push checks passed!"
